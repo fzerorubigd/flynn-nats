@@ -1,0 +1,77 @@
+#!/bin/bash -x
+set -eo pipefail
+
+steptxt="----->"
+YELLOW='\033[1;33m'
+RED='\033[1;31m'
+NC='\033[0m' # No Color
+
+export_env_dir() {
+  env_dir=$1
+  whitelist_regex=${2:-''}
+  blacklist_regex=${3:-'^(PATH|GIT_DIR|CPATH|CPPATH|LD_PRELOAD|LIBRARY_PATH|GOPATH|GOROOT|GOOS|GOBIN)$'}
+  if [ -d "$env_dir" ]; then
+    for e in $(ls $env_dir); do
+      echo "$e" | grep -E "$whitelist_regex" | grep -qvE "$blacklist_regex" &&
+      export "$e=$(cat $env_dir/$e)"
+      :
+    done
+  fi
+}
+
+warn() {
+    echo -e "${YELLOW} !!    $@${NC}"
+}
+
+err() {
+    echo -e >&2 "${RED} !!    $@${NC}"
+}
+
+step() {
+    echo "$steptxt $@"
+}
+
+start() {
+    echo -n "$steptxt $@... "
+}
+
+finished() {
+    echo "done"
+}
+
+mkdir -p "$1" "$2"
+BUILD=$(cd "$1/" && pwd)
+export CACHE=$(cd "$2/" && pwd)
+export WORK_DIR=${CACHE}
+
+export_env_dir $3
+GOVERSION=${GOVERSION:-go1.7.4}
+
+install_go() {
+    start $1
+    step "Downloading ${GOVERSION}"
+    wget -c -O ${CACHE}/${GOVERSION}.linux-amd64.tar.gz https://storage.googleapis.com/golang/${GOVERSION}.linux-amd64.tar.gz 2>&1 >/dev/null
+
+    step "Install ${GOVERSION}"
+    mkdir -p "${CACHE}/${GOVERSION}"
+    tar -C "${CACHE}/${GOVERSION}" -xzf ${CACHE}/${GOVERSION}.linux-amd64.tar.gz
+}
+
+cache_vendor() {
+    cd ${BUILD}
+    gb vendor restore
+    rm -rf ${CACHE}/vendor
+    cp -R ${BUILD}/vendor ${CACHE}
+    rm -rf ${CACHE}/vendor/pkg
+}
+
+export GOROOT=${CACHE}/${GOVERSION}/go
+export GOPATH=${CACHE}/gospace
+
+export GOBIN=${BUILD}
+export PATH=${PATH}:${GOROOT}/bin:${BUILD}
+
+go version || install_go "go is not installed"
+go version || grep ${GOVERSION} || install_go "go version is not ${GOVERSION}"
+
+go get github.com/nats-io/gnatsd
