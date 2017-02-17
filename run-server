@@ -12,6 +12,15 @@ GNATS_AUTZ_USER=${GNATS_AUTZ_USER:-ruser}
 GNATS_AUTZ_PASS=${GNATS_AUTZ_PASS:-T0pS3cr3t}
 GNATS_AUTZ_TIMEOUT=${GNATS_AUTZ_TIMEOUT:-2}
 
+NATS_NAME=${APPNAME:-nats}
+MY_IP=${EXTERNAL_IP}
+
+ALL_IP=($(dig +short ${NATS_NAME-web.discoverd}))
+ROUTES=""
+for i in ${ALL_IP[@]}; do
+    [ "$MY_IP" = "$i" ] || ROUTES+="\nnats-route://${GNATS_AUTZ_USER}:${GNATS_AUTZ_PASS}@${i}:${GNATS_CLUSTER_PORT}"
+done;
+
 cat >>${SCRIPT_DIR}/gnatsd.conf <<-EOCONF
 # Client port of 4222 on all interfaces
 port: ${GNATS_PORT}
@@ -24,6 +33,7 @@ cluster {
 
   # Route connections to be received on any interface on port 6222
   port: ${GNATS_CLUSTER_PORT}
+  host: '0.0.0.0'
 
   # Routes are protected, so need to use them with --routes flag
   # e.g. --routes=nats-route://ruser:T0pS3cr3t@otherdockerhost:6222
@@ -36,7 +46,7 @@ cluster {
   # Routes are actively solicited and connected to from this server.
   # This Docker image has none by default, but you can pass a
   # flag to the gnatsd docker image to create one to an existing server.
-  routes = []
+  routes = [${ROUTES}]
 }
 EOCONF
 

@@ -45,7 +45,7 @@ export CACHE=$(cd "$2/" && pwd)
 export WORK_DIR=${CACHE}
 
 export_env_dir $3
-GOVERSION=${GOVERSION:-go1.7.4}
+GOVERSION=${GOVERSION:-go1.8}
 
 install_go() {
     start $1
